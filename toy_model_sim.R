@@ -30,7 +30,11 @@
 ## To Do [?]
 ####
 
-## 1) Add a simple transmission model
+## 0) Split scripts into multiple
+## 1) Got a start on a quick non-linear least squares calc to explore parameter space, but need to:
+ ## A) Grab some real data
+ ## B) Finish off some pairwise parameter plots highlighting the good fits
+## 2) Add a simple transmission model
 
 
 ####
@@ -66,15 +70,27 @@ immune_resp_log <- function(t, d, A0, A1, A2, add_t, mult_t0, mult_t1) {
 
 
 ####
-## Parameters
+## Load some real data
 ####
 
+## For now just make some up to match the sim
+ ## Just a test essentially (not dynamic, so will need to be changed when
+  ## the code changes)
+real_data <- data.frame(
+  day      = seq(1, 120, length = 6) %>% round()
+, bd_meas  = c(1E1, 1E3, 1E4, 1E4, 1E3, 1E1)
+)
+
+
+####
+## Parameters
+####
 
 ## Run one simulation (TRUE) or multiple (FALSE) to explore the effect of uncertainty
 single_sim <- FALSE
 if (!single_sim) {
   n_sim     <- 100
-  uncer.bd  <- FALSE
+  uncer.bd  <- TRUE
   uncer.imm <- TRUE
 } else {
   n_sim <- 1
@@ -360,4 +376,53 @@ grid.arrange(gg.bd, gg.ir, gg.load, ncol = 1)
 }
 
 }
+
+
+####
+## Compare to "real data"
+####
+
+out.f <- out.f %>% left_join(., real_data)
+
+best_sims <- out.f %>% filter(!is.na(bd_meas)) %>%
+  mutate(diff = abs(log(Bd_load) - log(bd_meas))^2) %>%
+  group_by(sim_num) %>%
+  summarize(tot_diff = sum(diff)) %>% 
+  arrange(tot_diff)
+
+out.f <- out.f %>% mutate(
+  good_fit = ifelse(sim_num %in% best_sims$sim_num[1:10], 1, 0)
+)
+
+## Quick few plots for this comparison
+
+gg.bd <- out.f %>% filter(good_fit == 1) %>% {
+  ggplot(., aes(temp, gain)) + 
+    geom_line(aes(group = sim_num), colour = "firebrick3", size = 0.5, alpha = 0.5) + 
+    xlab("") + ylab("Bd growth")
+}
+  
+gg.ir <- out.f %>% filter(good_fit == 1) %>% {
+  ggplot(., aes(temp, loss)) + 
+    geom_line(aes(group = sim_num), colour = "dodgerblue3", size = 0.5, alpha = 0.5) + 
+    xlab("") + ylab("Immune 
+Response")
+}
+
+gg.load <- out.f %>% filter(good_fit == 1) %>% 
+  mutate(Bd_load = ifelse(Bd_load < 0.1, 0, Bd_load)) %>% {
+  ggplot(., aes(temp, Bd_load)) + 
+    geom_line(aes(group = sim_num), size = 0.5, alpha = 0.5) + 
+    scale_y_log10() +
+    xlab("Temparture") + ylab("Bd load")
+}
+
+grid.arrange(gg.bd, gg.ir, gg.load, ncol = 1)  
+
+## Some exploration of the parameter space 
+
+params$immunity <- params$immunity %>% left_join(., best_sims)
+params$bd       <- params$bd %>% left_join(., best_sims)
+
+## 
 
