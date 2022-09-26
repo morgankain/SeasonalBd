@@ -6,423 +6,69 @@
 ## Notes
 ####
 
-## 1) Currently set up to explore variation in Bd growth and Immune response on Bd loads
- ## Can set uncertainty in Bd growth and/or Immune response on or off
-  ## A) Turn uncertainty off for both to explore/plot single relationships
-  ## B) Setting uncertainty on for just Immune response seems like a --first pass-- sensible way to explore what a population of 
-   ##   bd loads may look like given variation among individuals in immune function
-  ## C) Setting both on seems like a --first pass-- way of generally exploring how variable Bd loads may look given
-   ##   expected uncertainty in these functional forms (which could be hard to define TBH)
-   
-## 2) Currently uncertainty given as a range and a Sobol sequence over the range of all parameters
+## 1) These scripts do three things:
+ ## A) Simulate within-individual Bd load progression based on temperature and time since infection
+   ##   as a combiniation of Bd growth rate and animal immune response
+ ## B) Explore variation in parameters controlling bd growth and immune response and comapre
+   ##   these estimated profiles to some measured profiles from Scotia Barrens
+ ## C) Run a simple SI model with transmission based on the distribution of load in the environment 
+   ## (essentially a rough start to an IPM)
+    ## NOTE: only just started working on this (note made Sep 26) so this is likely quite buggy
+
+## To use:
+ ## (A and B from above) Open "parameters.R" and set up desired parameters. Run through this script top to bottom
+  ## Can set uncertainty in Bd growth and/or Immune response on or off
+   ## i)   Turn uncertainty off for both to explore/plot single relationships
+   ## ii)  Setting uncertainty on for just Immune response seems like a --first pass-- sensible way to explore what a population of 
+    ##      bd loads may look like given variation among individuals in immune function
+   ## iii) Setting both on seems like a --first pass-- way of generally exploring how variable Bd loads may look given
+    ##      expected uncertainty in these functional forms (which could be hard to define TBH)
+ ## (C from above) Do the above and then open "epi_sim.R" and adjust parameters and then run through that script
+  ## Can set uncertainty in transmission and initiating infection on/off. Similar notes to ^^
+
+## Currently uncertainty is captured as a range and a Sobol sequence over the range of all parameters
  ## Not the most sensible moving forward (will want to set up some correlation matrix among parameters)
 
-
-## 3) When running the code:
-
-##### ---- A few choices need to be made at the top of "parameters" below to determine what kind of simulation to run 
- ## (for now just what processes to consider uncertainty in)
-
-##### ---- For now need to scroll down through the "parameters" section to adjust the parameter ranges for the functional forms, later
- ## can move these parameter choices higher up in the script
-
 ####
-## To Do [?]
+## Packages and Functions
 ####
-
-## 0) Split scripts into multiple
-## 1) Got a start on a quick non-linear least squares calc to explore parameter space, but need to:
- ## A) Grab some real data
- ## B) Finish off some pairwise parameter plots highlighting the good fits
-## 2) Add a simple transmission model
-
-
-####
-## Packages
-####
-
-needed_packages <- c("dplyr", "tidyr", "ggplot2", "pomp", "gridExtra")
-ll <- lapply(needed_packages, require, character.only = TRUE) 
-ll %>% unlist() %>% data.frame(packages = needed_packages, loaded = .)
-source("../ggplot_theme.R")
-
-
-####
-## Functions
-####
-
- ## Temp -> Bd growth
-bd_growth       <- function(t, B0, B1, B2, opt) { 
-    ## B0 - int
-    ## B1 - linear
-    ## B2 - quadratic
-  B0 + B1*(t - opt) + B2*(t - opt)^2
-}
- ## Temp + Time -> Immune Response
-immune_resp_log <- function(t, d, A0, A1, A2, add_t, mult_t0, mult_t1) {
-   ## A0     - base immune stength
-   ## A1     - linear temp effect
-   ## A2     - quadratic temp effect
-   ## add_t  - additive time effect
-   ## mult_t - cumulative time effect
-  add_t*d + (1/(1 + exp(-1 * ((A0 + A1*t + A2*t^2)))) * (mult_t0 + mult_t1*d))
-}
-
+source("packages_and_functions.R")
 
 ####
 ## Load some real data
 ####
-
-## For now just make some up to match the sim
- ## Just a test essentially (not dynamic, so will need to be changed when
-  ## the code changes)
-real_data <- data.frame(
-  day      = seq(1, 120, length = 6) %>% round()
-, bd_meas  = c(1E1, 1E3, 1E4, 1E4, 1E3, 1E1)
-)
-
+source("real_data.R")
 
 ####
 ## Parameters
 ####
-
-## Run one simulation (TRUE) or multiple (FALSE) to explore the effect of uncertainty
-single_sim <- FALSE
-if (!single_sim) {
-  n_sim     <- 100
-  uncer.bd  <- TRUE
-  uncer.imm <- TRUE
-} else {
-  n_sim <- 1
-  uncer.bd  <- FALSE
-  uncer.imm <- FALSE
-}
-
-## Establish all parameters needed for the simulation
- ## If just exploring one option at a time, adjust here
-if (single_sim) {
-
-params <- list(
-  temp = data.frame(
-    n_days     = 120
-  , temp_int   = 4
-  , temp_slope = 0.2
-  )
-, bd = data.frame(
-    B0  = 0.5
-  , B1  = -0.01
-  , B2  = -0.001
-  , opt = 22
-  , sim_num = 1  ## only relevant for !single_sim, but placeholder still needed
- )
-, immunity = data.frame(
-    A0       = -1
-  , A1       = 0.005
-  , A2       = 0.005
-  , add_t    = 0.000
-  , mult_t0  = 0.600
-  , mult_t1  = 0.002
-  , sim_num = 1  ## only relevant for !single_sim, but placeholder still needed
- )
-, seed  = data.frame(
-    day_start = 1
-  , load_init = 10
- )
-)
-
-} else {
-## Explore uncertainty / lots of options at once
-  
-## Realistically there is probably a strong correlation between the individual parameters for each functional form,
- ## however, this is a bit hard to predict, so sticking with Sobol for now
-  ## Still not so sure how sensible these ranges are -- just a start here
-  
-params <- list(
-  ## Temperature simulation. Could increase complexity later
-  temp = data.frame(
-    n_days     = 120
-  , temp_int   = 4
-  , temp_slope = 0.2
-  )
-  ## Initiate infection
-, seed  = data.frame(
-    day_start = 1
-  , load_init = 10
- )
-  ## Bd growth
-, bd = {
-  if (uncer.bd) {
-  data.frame(
-    B0  = c(0.2, 0.8)
-  , B1  = c(-0.004, -0.02)
-  , B2  = c(-0.0001, -0.002)
-  , opt = c(18, 26)
- )
-  } else {
-   data.frame(
-    B0  = 0.5
-  , B1  = -0.01
-  , B2  = -0.001
-  , opt = 22
-  , sim_num = 1  
- )
-  }
-}
-  ## Immune response
-, immunity = {
-  if (uncer.imm) {
-  data.frame(
-    A0       = c(-0.5, -1.5)
-  , A1       = c(0.001, 0.009)
-  , A2       = c(0.001, 0.009)
-  , add_t    = c(0.000, 0.000)
-  , mult_t0  = c(0.200, 1.000)
-  , mult_t1  = c(0.0005, 0.035)
- )
-  } else {
-  data.frame(
-    A0       = -1
-  , A1       = 0.005
-  , A2       = 0.005
-  , add_t    = 0.000
-  , mult_t0  = 0.600
-  , mult_t1  = 0.002
-  , sim_num = 1       
- )
-  }
-}
-)  
-
-if (uncer.bd) {
-params$bd <- sobolDesign(
-  lower = params$bd[1, ] %>% unlist()
-, upper = params$bd[2, ] %>% unlist()
-, n_sim
-) %>% mutate(
-  sim_num      = seq(n())
-  )
-}
-
-if (uncer.imm) {
-params$immunity <- sobolDesign(
-  lower = params$immunity[1, ] %>% unlist()
-, upper = params$immunity[2, ] %>% unlist()
-, n_sim
-) %>% mutate(
-  sim_num      = seq(n())
-  )
-}
-  
-}
-
-## For now built to only consider variation in the growth rate and immune dynamics, but could
- ## easily be adjusted to cover alternative temp regimes (just follow the convention used below)
-for (j in 1:n_sim) {
-  
-## set up what parameters will be used. Probably can clean up how this is done later
-if (uncer.bd) {
-  bd_parms <- j
-} else {
-  bd_parms <- 1
-}
-if (uncer.imm) {
-  imm_parms <- j
-} else {
-  imm_parms <- 1
-}
-
-out <- data.frame(day = seq(params$temp$n_days)) %>% 
-  ## Simulate Temperature -- Could imagine making this much more complicated
-  mutate(temp = with(params$temp, temp_int + day*temp_slope)) %>%
-  ## Determine Bd growth rate and immune response on these days and temperatures
-  mutate(
-    gain = with(params$bd %>% filter(sim_num == bd_parms), bd_growth(
-      t = temp, B0 = B0, B1 = B1, B2 = B2, opt = opt
-    ))
-  , loss = with(params$immunity %>% filter(sim_num == imm_parms), immune_resp_log(
-      t = temp, d = day, A0 = A0, A1 = A1, A2 = A2, add_t = add_t, mult_t0 = mult_t0, mult_t1 = mult_t1
-    ))) %>%
-  mutate(
-    bd_change = gain - loss
-  ) %>%
-  ## Initiate load
-  mutate(
-    Bd_load = with(params$seed, ifelse(day < day_start, 0, ifelse(day > day_start, NA, load_init)))
-  )
-
-## Load dynamics
-for (i in seq_along(seq(nrow(out) - 1))) {
-  out$Bd_load[i+1] <- with(out[i, ], Bd_load * exp(bd_change))
-}
-
-## label so can compare to parameters
-out <- out %>% mutate(sim_num = j)
-
-## Probably not the cleanest way to do this, but w/e
-if (j == 1) {
- out.f <- out
-} else {
- out.f <- rbind(out.f, out)
-}
-
-## Quick print to track progress
-if (((j / 20) %% 1) == 0) {
-  print(paste("Through", (j/n_sim) * 100, "% of simulations"))
-}
-
-}
-
+source("parameters.R")
 
 ####
-## Plots
+## Establish Bd Growth + Immunity vs Temperature
+##   and
+## Predict Bd Profiles from ^^
 ####
+source("pred_bd.R")
 
-## Could "waste" some more time ensuring that these line up perfeclty, but w/e
-if (single_sim) {
-  
-gg.func <- out.f %>% dplyr::select(-Bd_load, -sim_num) %>% pivot_longer(-c(day, temp), names_to = "Component") %>%
-  mutate(Component = plyr::mapvalues(Component, from = c("gain", "loss", "bd_change"), to = c("Bd Growth", "Immune Response", "Difference"))) %>% {
-  ggplot(., aes(day, value)) + 
-    geom_line(aes(colour = Component), size = 2) + 
-    geom_hline(yintercept = 0, linetype = "dashed") +
-    scale_colour_brewer(palette = "Dark2") +
-    xlab("") +
-    ylab("Rate")
-  }
-
-gg.load <- out.f %>% dplyr::select(-gain, -loss, -bd_change, -sim_num) %>% pivot_longer(-c(day, temp), names_to = "Component") %>% {
-    ggplot(., aes(day, value)) + 
-    geom_line(aes(colour = Component), size = 2) + 
-    scale_colour_manual(values = c("dodgerblue3")) +
-    xlab("Day") +
-    ylab("Bd Load") + 
-    scale_y_log10()
-}
-
-grid.arrange(gg.func, gg.load, ncol = 1)
-  
-  
-} else {
-  
-if ((uncer.bd & uncer.imm) | (uncer.bd & !uncer.imm)) {
-  
-gg.bd <- out.f %>% group_by(day, temp) %>% summarize(
-  lwr_w_g = quantile(gain, 0.025)
-, lwr_n_g = quantile(gain, 0.200)
-, mid_g   = quantile(gain, 0.500)
-, upr_n_g = quantile(gain, 0.800)
-, upr_w_g = quantile(gain, 0.975)
-) %>% {
-  ggplot(., aes(temp, mid_g)) + geom_line() + 
-    geom_ribbon(aes(ymin = lwr_w_g, ymax = upr_w_g), alpha = 0.3) +
-    geom_ribbon(aes(ymin = lwr_n_g, ymax = upr_n_g), alpha = 0.3) +
-    xlab("") + ylab("Bd growth")
-}
-  
-gg.ir <- out.f %>% group_by(day, temp) %>% summarize(
-  lwr_w_l = quantile(loss, 0.025)
-, lwr_n_l = quantile(loss, 0.200)
-, mid_l   = quantile(loss, 0.500)
-, upr_n_l = quantile(loss, 0.800)
-, upr_w_l = quantile(loss, 0.975)
-) %>% {
-  ggplot(., aes(temp, mid_l)) + geom_line() + 
-    geom_ribbon(aes(ymin = lwr_w_l, ymax = upr_w_l), alpha = 0.3) +
-    geom_ribbon(aes(ymin = lwr_n_l, ymax = upr_n_l), alpha = 0.3) +
-    xlab("") + ylab("Immune 
-Response")
-}
-
-gg.load <- out.f %>% group_by(day, temp) %>% mutate(Bd_load = ifelse(Bd_load < 0.1, 0, Bd_load)) %>% summarize(
-  lwr_w_b = quantile(Bd_load, 0.025)
-, lwr_n_b = quantile(Bd_load, 0.200)
-, mid_b   = quantile(Bd_load, 0.500)
-, upr_n_b = quantile(Bd_load, 0.800)
-, upr_w_b = quantile(Bd_load, 0.975)
-) %>% {
-  ggplot(., aes(temp, mid_b)) + geom_line() + 
-    geom_ribbon(aes(ymin = lwr_w_b, ymax = upr_w_b), alpha = 0.3) +
-    geom_ribbon(aes(ymin = lwr_n_b, ymax = upr_n_b), alpha = 0.3) +
-    scale_y_log10() +
-    xlab("Temparture") + ylab("Bd load")
-}
-
-grid.arrange(gg.bd, gg.ir, gg.load, ncol = 1)
-
-} else {
-  
-gg.bd <- out.f %>% filter(sim_num == 1) %>% {
-  ggplot(., aes(temp, gain)) + 
-    geom_line(colour = "firebrick3", size = 2) + 
-    xlab("") + ylab("Bd growth")
-}
-  
-gg.ir <- out.f %>% {
-  ggplot(., aes(temp, loss)) + 
-    geom_line(aes(group = sim_num), colour = "dodgerblue3", size = 0.5, alpha = 0.5) + 
-    xlab("") + ylab("Immune 
-Response")
-}
-
-gg.load <- out.f %>% mutate(Bd_load = ifelse(Bd_load < 0.1, 0, Bd_load)) %>% {
-  ggplot(., aes(temp, Bd_load)) + 
-    geom_line(aes(group = sim_num), size = 0.5, alpha = 0.5) + 
-    scale_y_log10() +
-    xlab("Temparture") + ylab("Bd load")
-}
-
-grid.arrange(gg.bd, gg.ir, gg.load, ncol = 1)  
-  
-}
-
-}
-
+####
+## Plots of simulated relationships and Bd profiles
+####
+source("plots.R")
 
 ####
 ## Compare to "real data"
 ####
+source("compare_to_data.R")
 
-out.f <- out.f %>% left_join(., real_data)
+####
+## Try a simple SIR-style transmission model with load dependent transmission
+## (essentially a custom IPM)
+####
+uncer.init  <- TRUE
+uncer.trans <- TRUE
+ ## OPEN to choose parameters, do not just source
+source("epi_sim.R")
 
-best_sims <- out.f %>% filter(!is.na(bd_meas)) %>%
-  mutate(diff = abs(log(Bd_load) - log(bd_meas))^2) %>%
-  group_by(sim_num) %>%
-  summarize(tot_diff = sum(diff)) %>% 
-  arrange(tot_diff)
 
-out.f <- out.f %>% mutate(
-  good_fit = ifelse(sim_num %in% best_sims$sim_num[1:10], 1, 0)
-)
-
-## Quick few plots for this comparison
-
-gg.bd <- out.f %>% filter(good_fit == 1) %>% {
-  ggplot(., aes(temp, gain)) + 
-    geom_line(aes(group = sim_num), colour = "firebrick3", size = 0.5, alpha = 0.5) + 
-    xlab("") + ylab("Bd growth")
-}
-  
-gg.ir <- out.f %>% filter(good_fit == 1) %>% {
-  ggplot(., aes(temp, loss)) + 
-    geom_line(aes(group = sim_num), colour = "dodgerblue3", size = 0.5, alpha = 0.5) + 
-    xlab("") + ylab("Immune 
-Response")
-}
-
-gg.load <- out.f %>% filter(good_fit == 1) %>% 
-  mutate(Bd_load = ifelse(Bd_load < 0.1, 0, Bd_load)) %>% {
-  ggplot(., aes(temp, Bd_load)) + 
-    geom_line(aes(group = sim_num), size = 0.5, alpha = 0.5) + 
-    scale_y_log10() +
-    xlab("Temparture") + ylab("Bd load")
-}
-
-grid.arrange(gg.bd, gg.ir, gg.load, ncol = 1)  
-
-## Some exploration of the parameter space 
-
-params$immunity <- params$immunity %>% left_join(., best_sims)
-params$bd       <- params$bd %>% left_join(., best_sims)
-
-## 
 
