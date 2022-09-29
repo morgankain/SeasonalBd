@@ -1,0 +1,28 @@
+A Paper?
+--------
+
+1) Explore alternative scenarios that could potentially explain individual Bd profiles
+	-- Temperature dependent growth rate
+	-- Temperature and time dependent immune response
+	-- Temperature-seeking behavioral regulation
+    A) Describe alternative sensible functional forms
+    B) Simulate Bd profiles over an array of parameters, compare to real data, look for likely parameter spaces
+
+ ^^ Determine if the variation in the underlying parameters needed to explain the variation in the real profiles is realistic among-individual variation or if this variation points to something else that is likely going on (transmission dynamics)  
+
+
+2) Simulate population-level Bd profiles using the functional forms from the above work
+    A) Determine fit to these data | alternative assumptions for how transmission is occurring
+
+
+3) Identify the functional forms/parameters that
+    A) lead to equivalent fits (alternative likely scenarios to resolve)
+    B) change the answer a lot (a sensitivity to validate)
+
+
+Issues
+------
+
+1) So many possible parameter combinations
+2) Newt Bd profiles are very noisy
+3) Newts are sampled over a relatively narrow temperature band 
