@@ -2,7 +2,8 @@
 ## Plots of simulated relationships and Bd profiles
 ####
 
-## Could "waste" some more time ensuring that these line up perfeclty, but w/e
+## Could "waste" some more time ensuring that these line up perfectly, but w/e, "beautified" enough for now
+ ## to get the point across 
 if (single_sim) {
   
 gg.func <- out.f %>% dplyr::select(-Bd_load, -sim_num) %>% pivot_longer(-c(day, temp), names_to = "Component") %>%

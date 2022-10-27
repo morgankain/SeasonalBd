@@ -1,7 +1,11 @@
+####
+## Establish parameters for the within-individual piece of the model
+####
+
 ## Run one simulation (TRUE) or multiple (FALSE) to explore the effect of uncertainty
 single_sim <- FALSE
 if (!single_sim) {
-  n_sim     <- 100
+  n_sim     <- 1000
   uncer.bd  <- TRUE
   uncer.imm <- TRUE
 } else {

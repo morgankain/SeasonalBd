@@ -1,5 +1,5 @@
 ####
-## Compare to "real data"
+## Compare simulated bd profiles to a few of the best profiles obtained from the newts in PA
 ####
 
 out.f <- out.f %>% left_join(.
@@ -7,6 +7,7 @@ out.f <- out.f %>% left_join(.
     pivot_wider(., names_from = IndividualID, values_from = TargetCopies.swab)
   )
 
+## Just select a few individuals
 best_sims <- out.f %>%
   mutate(
     XOXBXX = abs(log(Bd_load) - log(XOXBXX))^2

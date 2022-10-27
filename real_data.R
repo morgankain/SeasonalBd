@@ -30,7 +30,12 @@ real_data <- real_data %>% left_join(.
   , real_data %>% filter(!is.na(TargetCopies.swab)) %>% 
   group_by(IndividualID, year) %>% 
   summarize(n_meas = n()) %>% arrange(desc(n_meas))) %>%
-  ungroup() %>% filter(n_meas == max(n_meas, na.rm = T)) %>%
+  ungroup() %>% 
+  ## Select just those individuals that were swabbed for Bd many times within a given year
+  filter(
+  #   n_meas == max(n_meas, na.rm = T)
+      n_meas >= (max(n_meas, na.rm = T) - 2)
+    ) %>%
   mutate(log_bd = log(TargetCopies.swab)) %>%
   left_join(., real_data %>% group_by(year, JD) %>% 
       summarize(temp = mean(Temp, na.rm = T)) %>% mutate(temp = round(temp, 1)))
@@ -47,12 +52,22 @@ real_data <- read.csv("SP_NOVI_processed.csv")
   print("Neither of the necessary files are present"); break
 }
   
-## Take a peek at these data
+## Take a peek at the profiles of just a few individuals
 real_data %>% {
   ggplot(., aes(temp, TargetCopies.swab)) + 
     geom_point(aes(colour = IndividualID)) +
     geom_line(aes(colour = IndividualID)) +
     scale_y_log10() +
-    xlab('Temperature') + ylab('Bd Load')
+    xlab('Temperature') + ylab('Bd Load') +
+    facet_wrap(~IndividualID)
+}
+
+real_data %>% {
+  ggplot(., aes(JD, TargetCopies.swab)) + 
+    geom_point(aes(colour = IndividualID)) +
+    geom_line(aes(colour = IndividualID)) +
+    scale_y_log10() +
+    xlab('Julian Day') + ylab('Bd Load') +
+    facet_wrap(~IndividualID)
 }
 

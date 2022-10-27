@@ -2,6 +2,7 @@
 ## Packages and Functions
 ####
 
+## Needed packages and ggplot theme for beautified plots
 needed_packages <- c("dplyr", "tidyr", "ggplot2", "pomp", "gridExtra")
 ll <- lapply(needed_packages, require, character.only = TRUE) 
 ll %>% unlist() %>% data.frame(packages = needed_packages, loaded = .) %>% print()
@@ -14,6 +15,7 @@ bd_growth       <- function(t, B0, B1, B2, opt) {
     ## B2 - quadratic
   B0 + B1*(t - opt) + B2*(t - opt)^2
 }
+
  ## Alternative Temp -> Bd growth based on some lab experiments
 stinner_func <- function(c, k1, k2, opt, t) {
  ## plateau like function, steep at low and high temps, flat maxima inbetween these vals 
@@ -25,6 +27,7 @@ stinner_func <- function(c, k1, k2, opt, t) {
 # bd_k2  <- -2.555
 # bd_opt <- 19.234
 }
+
  ## Temp + Time -> Immune Response
 immune_resp_log <- function(t, d, A0, A1, A2, add_t, mult_t0, mult_t1) {
    ## A0     - base immune stength
@@ -34,6 +37,7 @@ immune_resp_log <- function(t, d, A0, A1, A2, add_t, mult_t0, mult_t1) {
    ## mult_t - cumulative time effect
   add_t*d + (1/(1 + exp(-1 * ((A0 + A1*t + A2*t^2)))) * (mult_t0 + mult_t1*d))
 }
+
  ## Transmission based on cumulative load in the population
 inf_prob <- function(load, a, b, k) {
  ## simple piece-wise, between min and max, a logistic
@@ -48,4 +52,4 @@ inf_prob <- function(load, a, b, k) {
     , plogis(a + b * load))
     )
 }
- ##
+ 
